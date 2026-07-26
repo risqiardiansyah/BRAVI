@@ -71,6 +71,22 @@ class IdempotencyKeyConflictError(AppError):
     status_code = 409
 
 
+class FileTooLargeError(AppError):
+    """`FILE_TOO_LARGE` / 413 — exceeds `MAX_IMAGE_UPLOAD_MB`/`MAX_FILE_UPLOAD_MB`
+    (docs/22-error-handling.md §2, docs/08-security.md §3)."""
+
+    code = "FILE_TOO_LARGE"
+    status_code = 413
+
+
+class UnsupportedMediaTypeError(AppError):
+    """`UNSUPPORTED_MEDIA_TYPE` / 415 — MIME type not in the allowlist
+    (docs/22-error-handling.md §2, docs/08-security.md §3)."""
+
+    code = "UNSUPPORTED_MEDIA_TYPE"
+    status_code = 415
+
+
 async def app_error_handler(request: Request, exc: Exception) -> JSONResponse:
     assert isinstance(exc, AppError)
     return JSONResponse(

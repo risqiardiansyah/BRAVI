@@ -73,7 +73,7 @@ Keep this table's Status column in sync with each phase's own Status line — th
 | 6 | Ingestion Graph & Startup Ingestion Job | 2, 3 | DONE |
 | 7 | Operator Ingestion & Knowledge Management Endpoints | 6 | DONE |
 | 8 | Session & Message Persistence + Endpoints | 2 | DONE |
-| 9 | User Chat Graph & `/api/chat` (SSE) | 3, 4, 6, 8 | NOT STARTED |
+| 9 | User Chat Graph & `/api/chat` (SSE) | 3, 4, 6, 8 | DONE |
 | 10 | Operator Chat Graph & `/api/opr/chat` (SSE) | 7, 9 | NOT STARTED |
 | 11 | Trending & Analytics Endpoints | 9, 10 | NOT STARTED |
 | 12 | Security Hardening Pass | 7, 9, 10 | NOT STARTED |
@@ -407,16 +407,16 @@ This graph shows the *true* logical dependencies (e.g., Phase 3 and Phase 4 don'
 
 ## Phase 9 — User Chat Graph & `/api/chat` (SSE)
 
-**Status:** NOT STARTED
+**Status:** DONE
 **Depends on:** Phase 3, Phase 4, Phase 6, Phase 8
 **Reference docs:** `05-ai-agent-design.md` §1-§2, `06-api-specification.md` §0/§2, `docs/prompts/ai-agent.md` §1/§3/§4/§5/§7, `08-security.md` §4, `11-coding-standard.md` §7/§8.1, `17-memory-strategy.md`, `20-performance-target.md`, `12-testing-strategy.md` §3
 
 **Tasks**
-- [ ] `graphs/nodes/`: `preprocess_input` (multimodal), `classify_greeting`, `classify_out_of_topic`, `embed_question`, `similarity_search` (per `18-rag-design.md` §4 query), `check_similarity_threshold`, `condense_history` (incremental, persists `sessions.history_summary` per `17-memory-strategy.md` §4), `generate_answer`, `append_sources`, `persist_message`, `log_metrics`.
-- [ ] `graphs/user_chat_graph.py` — imports only `tools/user_tools.py` and `graphs/nodes/`, never `tools/operator_tools.py`.
-- [ ] `tools/user_tools.py` (QA-only; minimal is fine if no extra tools are needed beyond the node pipeline).
-- [ ] Canonical system prompts from `docs/prompts/ai-agent.md` §1/§3/§4/§5/§7 implemented verbatim (Bahasa Indonesia, not a placeholder).
-- [ ] `api/user_router.py`: `POST /api/chat` — SSE using the single fixed JSON schema (`06-api-specification.md` §0), session resolution from Phase 8, rate limiting from Phase 4.
+- [x] `graphs/nodes/`: `preprocess_input` (multimodal), `classify_greeting`, `classify_out_of_topic`, `embed_question`, `similarity_search` (per `18-rag-design.md` §4 query), `check_similarity_threshold`, `condense_history` (incremental, persists `sessions.history_summary` per `17-memory-strategy.md` §4), `generate_answer`, `append_sources`, `persist_message`, `log_metrics`.
+- [x] `graphs/user_chat_graph.py` — imports only `tools/user_tools.py` and `graphs/nodes/`, never `tools/operator_tools.py`.
+- [x] `tools/user_tools.py` (QA-only; minimal is fine if no extra tools are needed beyond the node pipeline).
+- [x] Canonical system prompts from `docs/prompts/ai-agent.md` §1/§3/§4/§5/§7 implemented verbatim (Bahasa Indonesia, not a placeholder).
+- [x] `api/user_router.py`: `POST /api/chat` — SSE using the single fixed JSON schema (`06-api-specification.md` §0), session resolution from Phase 8, rate limiting from Phase 4.
 
 **Definition of Done**
 - Bedrock text-generation is never invoked for greeting/out-of-topic/below-threshold outcomes — verified by call-count assertion in tests, not by code inspection alone.
@@ -425,13 +425,25 @@ This graph shows the *true* logical dependencies (e.g., Phase 3 and Phase 4 don'
 - `user_chat_graph.py` has zero import path reaching `tools/operator_tools.py` — structurally, not just by inspection.
 
 **Verification**
-- [ ] `pytest tests/integration/test_user_chat_graph.py` — all four short-circuit tiers + full RAG per `12-testing-strategy.md` §3, asserting zero Bedrock text calls for the first three tiers
-- [ ] `pytest tests/integration/test_persona_isolation.py` — import-graph check per `11-coding-standard.md` §8.1
-- [ ] `pytest tests/integration/test_language.py` — Indonesian- and English-phrased input both produce Bahasa Indonesia output
-- [ ] `pytest tests/integration/test_freshness.py` per `12-testing-strategy.md` §3
-- [ ] Manual: `curl -N localhost:8000/api/chat` with an English-phrased in-domain question — confirm SSE stream, Bahasa Indonesia Markdown answer, correct `## Sources`
+- [x] `pytest tests/integration/test_user_chat_graph.py` — all four short-circuit tiers + full RAG per `12-testing-strategy.md` §3, asserting zero Bedrock text calls for the first three tiers
+- [x] `pytest tests/integration/test_persona_isolation.py` — import-graph check per `11-coding-standard.md` §8.1
+- [x] `pytest tests/integration/test_language.py` — Indonesian- and English-phrased input both produce Bahasa Indonesia output
+- [x] `pytest tests/integration/test_freshness.py` per `12-testing-strategy.md` §3
+- [x] Manual: `curl -N localhost:8000/api/chat` with an English-phrased in-domain question — confirm SSE stream, Bahasa Indonesia Markdown answer, correct `## Sources`
 
 **Gate:** Do not begin Phase 10 until every box above is checked and this phase's Status is `DONE`. **This is the M3/"Core Chat Pipeline" exit gate.**
+
+> **Note (2026-07-26):** Several implementation decisions where the reference docs left room, none requiring a stop:
+>
+> 1. **`classify_out_of_topic` is a pure keyword/pattern heuristic, not embedding-based.** `05-ai-agent-design.md` §2.4 offers either approach and calls the choice "an implementation detail to finalize during development" — but `IMPLEMENTATION_PLAN.md` §3's Non-Negotiable Constraints fix the short-circuit order as `greeting -> out-of-topic -> similarity threshold -> RAG`, which structurally rules out the embedding-based variant (it would need to run *after* `embed_question`). A denylist of obvious off-topic request categories (jokes/poems/generic trivia) is used; anything else falls through to the real similarity-threshold gate as a defense-in-depth net.
+> 2. **Short-circuit `respond_*` nodes route to `persist_message`/`log_metrics`, not literally straight to `END`.** §2.2's diagram draws `respond_default_greeting -> END` etc., but the node-details table lists `persist_message`/`log_metrics` as writing on every path ("short-circuit tier" is one of `log_metrics`'s own logged fields, and `07-database-design.md` §3.7's `short_circuit_reason` column exists to capture exactly this) — read as an abbreviated diagram, not a literal one. `append_sources` is skipped on these paths (nothing to cite; `sources` is `null` in the `done` event, per `06-api-specification.md` §0).
+> 3. **`preprocess_input`'s image-description prompt is not in `docs/prompts/ai-agent.md`** (only the QA/summary/condensation prompts are canonical there) — an internal-only instruction was written for it (same class as the condensation prompt: never shown to the user), reusing the same vision-capable `BEDROCK_TEXT_MODEL` call per §2.3's "no separate captioning/OCR model" constraint.
+> 4. **Canned responses/classifier keyword lists are Python constants (`graphs/canned_responses.py`), not a DB-backed config table.** §2.5 suggests a config table as one option, but no such table exists in `07-database-design.md` §3 and adding one isn't this phase's stated task — inventing new schema for it was avoided; a later phase can move these to a live store without touching node logic, since every node already reads through this one module.
+> 5. **`usage_metrics.input_tokens`/`output_tokens` are approximated with `utils/chunking.count_tokens`**, not Bedrock's own Converse API usage metadata — `clients/bedrock_client.py`'s `generate_stream()` contract (Phase 3, already `DONE`) only yields text deltas, and extending that contract was out of this phase's scope. `estimated_cost_usd` is left `NULL` for now — `05-ai-agent-design.md` §2.3's `log_metrics` row only names "latency per node, model used, tokens, short-circuit tier," not cost estimation.
+> 6. **File upload validation for `/api/chat`'s image (MIME allowlist, `MAX_IMAGE_UPLOAD_MB` size limit) is implemented now** since `06-api-specification.md` §2's own error table requires `413`/`415` for this endpoint; real malware/content scanning (`08-security.md` §8a) is explicitly Phase 12's task and was not built here.
+> 7. **Empirical finding, no code change made:** live verification against real Bedrock (Cohere Embed v4) showed cosine similarity scores of ~0.51-0.65 for genuinely on-topic, well-matched question/document pairs — comfortably *below* the default `SIMILARITY_SCORE_THRESHOLD` of `0.75`. This confirms (rather than newly discovers) the similarity-threshold-tuning risk already tracked in `01-prd.md` §11 item 3 / `18-rag-design.md` §5. No default was changed — that's a product tuning decision, not something this phase's scope authorizes changing unilaterally; flagged here so it's visible before real traffic hits it.
+>
+> **Manual verification against the real running app** (same pattern as prior phases): started a temporary `redis:7-alpine` container (Redis wasn't already running in this environment) alongside the existing `bravi-db-1` container and `poetry run uvicorn`. Ingested one small real text document via `/api/opr/ingest` (a synthetic refund-policy paragraph), then exercised all three short-circuit tiers plus full RAG via real `curl -N` SSE calls against real Bedrock: greeting -> exact canned text; "tell me a joke" -> out-of-topic canned text; a genuinely on-topic question -> `low_similarity` (see empirical finding above — real score below the default threshold); the same question re-tried with `SIMILARITY_SCORE_THRESHOLD=0.5` passed as a one-off process environment variable (committed `.env` never touched, same technique as Phase 6's `DOCUMENT_BASE_URL` override) -> a real streamed, grounded, Bahasa Indonesia Markdown answer citing the ingested document plus the pre-existing Phase 6 sample PDFs (no reranking exists per `18-rag-design.md` §5, so all `RETRIEVAL_TOP_K` matches are cited, not just the most relevant one — documented, expected behavior) with a correct `## Sources` section. Also confirmed: unknown `session_id` -> `404`/`SESSION_NOT_FOUND` returned before the stream opens; `POST /api/messages` round-trips the exact persisted user question and assistant answer. All test sessions/`usage_metrics` rows and the one manually-ingested document were deleted afterward via direct repository access / `DELETE /api/opr/knowledge/{id}`; the temporary Redis container was removed; the two pre-existing Phase 6 sample documents were left untouched.
 
 ---
 
