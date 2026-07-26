@@ -1,0 +1,59 @@
+services:
+  app:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    env_file: .env
+    environment:
+      # Override the .env host-dev values (localhost) with the compose service
+      # hostnames — from inside the app container, "localhost" is the app
+      # container itself, not the sibling db/redis containers.
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/bravi_ai_chatbot
+      REDIS_URL: redis://redis:6379/0
+    ports: ["8000:8000"]
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+  # Cron-scheduled ingestion job (docs/10-deployment.md §4, docs/IMPLEMENTATION_PLAN.md
+  # Phase 6) — a separate long-running container, not inline inside the web process and
+  # NOT run immediately on `docker-compose up`. It only invokes the actual ingestion job
+  # at each occurrence of INGESTION_CRON_SCHEDULE (default daily 02:00 UTC) — user-directed
+  # deviation from this phase's original "run once at startup" design, see the dated
+  # correction note in IMPLEMENTATION_PLAN.md. `app` never depends on this container at
+  # all (fire-and-forget): it starts serving traffic as soon as db/redis are ready, with a
+  # knowledge base that fills in progressively as scheduled ingestion runs complete.
+  # An ad hoc/manual run is still available via
+  # `docker compose run --rm ingestion python -m app.jobs.run_initial_ingestion`.
+  ingestion:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/bravi_ai_chatbot
+    command: ["python", "-m", "app.jobs.ingestion_scheduler"]
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: bravi_ai_chatbot
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    ports: ["5432:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+
+volumes:
+  pgdata:

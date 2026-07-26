@@ -1,0 +1,42 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd \"c:/Project/BCAS/BRAVI\" && mkdir -p backend/app/api backend/app/graphs/nodes backend/app/tools backend/app/middleware backend/app/services backend/app/models backend/app/schemas backend/app/repositories backend/app/clients backend/app/jobs backend/app/utils backend/tests/unit backend/tests/integration backend/tests/security && find backend -type d | sort)",
+      "Bash(pip install *)",
+      "Bash(poetry --version)",
+      "Bash(poetry run *)",
+      "Bash(docker build *)",
+      "Bash(cp .env.example .env)",
+      "Bash(docker-compose config *)",
+      "Bash(docker-compose up *)",
+      "Bash(docker-compose ps *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:8000/openapi.json)",
+      "Bash(docker-compose down *)",
+      "Bash(python -c \"import yaml,sys; d=yaml.safe_load\\(open\\('.github/workflows/ci.yml'\\)\\); print\\('valid YAML, jobs:', list\\(d['jobs'].keys\\(\\)\\)\\)\")",
+      "Bash(git check-ignore *)",
+      "Bash(docker run *)",
+      "Bash(poetry lock *)",
+      "Bash(poetry install *)",
+      "Bash(aws sts *)",
+      "Bash(aws configure *)",
+      "Bash(poetry add *)",
+      "Bash(echo \"EXIT:$?\")",
+      "Bash(poetry run python -c \"import redis, os; print\\(os.path.dirname\\(redis.__file__\\)\\)\" --directory \"c:/Project/BCAS/BRAVI/backend\" 2>&1 || true *)",
+      "Read(//c/Users/User/AppData/Local/pypoetry/Cache/virtualenvs/**)",
+      "Bash(curl -s -o /dev/null -w \"HTTP:%{http_code}\\\\n\" http://127.0.0.1:8000/health)",
+      "Bash(curl -s http://127.0.0.1:8000/health)",
+      "Bash(curl -s -w \"\\\\nHTTP:%{http_code}\\\\n\" http://127.0.0.1:8000/health/ready)",
+      "Bash(curl -s -D - -o \"C:/Users/User/AppData/Local/Temp/claude/c--Project-BCAS-BRAVI/bce957f8-6584-43af-b5f9-ed678109a722/scratchpad/metrics_body.txt\" http://127.0.0.1:8000/metrics)",
+      "Bash(docker stop *)",
+      "Bash(docker start *)",
+      "Bash(curl -s -o /dev/null -w \"HTTP:%{http_code}\\\\n\" http://127.0.0.1:8000/health --max-time 2)",
+      "Bash(docker rm *)",
+      "Bash(docker compose *)",
+      "Bash(xargs -I{} echo {})",
+      "Bash(poetry remove *)"
+    ],
+    "additionalDirectories": [
+      "c:\\Project\\BCAS\\BRAVI\\backend\\app"
+    ]
+  }
+}
