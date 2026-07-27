@@ -127,6 +127,44 @@ class TestIngestionCronSchedule:
             _settings(INGESTION_CRON_SCHEDULE=value)
 
 
+class TestRetentionCronSchedule:
+    @pytest.mark.parametrize("value", ["0 3 * * *", "*/30 * * * *", "0 0 1 1 *", "45 4 * * 1-5"])
+    def test_valid_cron_expression_passes(self, value: str) -> None:
+        settings = _settings(RETENTION_CRON_SCHEDULE=value)
+        assert settings.RETENTION_CRON_SCHEDULE == value
+
+    @pytest.mark.parametrize(
+        "value",
+        [
+            "not a cron",  # wrong field count
+            "99 * * * *",  # minute out of range
+            "* 99 * * *",  # hour out of range
+        ],
+    )
+    def test_invalid_cron_expression_fails(self, value: str) -> None:
+        with pytest.raises(ValidationError, match="RETENTION_CRON_SCHEDULE"):
+            _settings(RETENTION_CRON_SCHEDULE=value)
+
+
+class TestCostBudgetCronSchedule:
+    @pytest.mark.parametrize("value", ["0 * * * *", "*/30 * * * *", "0 0 1 1 *", "45 4 * * 1-5"])
+    def test_valid_cron_expression_passes(self, value: str) -> None:
+        settings = _settings(COST_BUDGET_CRON_SCHEDULE=value)
+        assert settings.COST_BUDGET_CRON_SCHEDULE == value
+
+    @pytest.mark.parametrize(
+        "value",
+        [
+            "not a cron",  # wrong field count
+            "99 * * * *",  # minute out of range
+            "* 99 * * *",  # hour out of range
+        ],
+    )
+    def test_invalid_cron_expression_fails(self, value: str) -> None:
+        with pytest.raises(ValidationError, match="COST_BUDGET_CRON_SCHEDULE"):
+            _settings(COST_BUDGET_CRON_SCHEDULE=value)
+
+
 class TestAwsCredentialPairing:
     def test_both_empty_passes(self) -> None:
         _settings(AWS_ACCESS_KEY_ID=None, AWS_SECRET_ACCESS_KEY=None)

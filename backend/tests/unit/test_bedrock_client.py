@@ -176,7 +176,7 @@ async def test_embed_exhausts_retries_and_raises(make_client: Callable[..., Bedr
 
 
 async def test_embed_validation_error_not_retried(
-    make_client: Callable[..., BedrockClient]
+    make_client: Callable[..., BedrockClient],
 ) -> None:
     client = make_client()
     client._client.invoke_model.side_effect = _client_error("ValidationException")

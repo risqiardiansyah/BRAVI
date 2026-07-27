@@ -73,7 +73,7 @@ Applies to both `/api/chat` and `/api/opr/chat`, executed **in this order**, eac
 ### FR-9: Operator Analytics
 - **Endpoint**: `GET /api/opr/analytics`
 - **Behavior**: Aggregates usage metrics:
-  - Most-asked questions by **User** vs **Visitor** (see open question in PRD §11.3 — definition to be finalized)
+  - Most-asked questions (`top_questions.user` — non-role calculation, counts questions from both User and Operator sessions together, not split by persona)
   - Volume of chats over time
   - Average latency (overall and per short-circuit tier)
   - Model usage breakdown (embedding-only vs full generation)

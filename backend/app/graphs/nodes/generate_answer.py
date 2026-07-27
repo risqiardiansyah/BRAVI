@@ -8,10 +8,17 @@ same tokenizer `utils/chunking.py` already uses for chunk sizing (Bedrock's Conv
 usage metadata isn't surfaced by `bedrock_client.generate_stream`'s current contract, and
 extending that contract is out of this phase's scope — see `docs/IMPLEMENTATION_PLAN.md`
 Phase 9 completion notes).
+
+Shared by both graphs (docs/05-ai-agent-design.md §2.2's diagram: `operator_chat_graph`'s
+`route_by_intent` routes here on its "qa" branch, same as `user_chat_graph`'s only path).
+`mode` in the terminal `done` event is `"qa"` on `/api/opr/chat`'s QA path and always
+`null` on `/api/chat` (docs/06-api-specification.md §0: "always null on /api/chat") — set
+here from `state["persona"]` rather than duplicating this node per graph.
 """
 
 from __future__ import annotations
 
+import time
 from typing import Any
 
 from langgraph.config import get_stream_writer
@@ -40,15 +47,21 @@ async def generate_answer(state: ChatState) -> dict[str, Any]:
         messages=[PromptMessage(role="user", content=[PromptContentBlock(text=state["question"])])],
     )
 
+    started = state.get("started_monotonic")
+    ttft_ms: int | None = None
     chunks: list[str] = []
     async for token in bedrock_client.generate_stream(prompt):
+        if ttft_ms is None and started is not None:
+            ttft_ms = int((time.monotonic() - started) * 1000)
         chunks.append(token)
         writer({"type": "token", "content": token})
     answer = "".join(chunks)
 
     return {
         "answer": answer,
+        "mode": "qa" if state.get("persona") == "operator" else None,
         "text_model_used": settings.BEDROCK_TEXT_MODEL,
         "input_tokens": count_tokens(system_prompt) + count_tokens(state["question"]),
         "output_tokens": count_tokens(answer),
+        "ttft_ms": ttft_ms,
     }

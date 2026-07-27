@@ -52,6 +52,7 @@ Each LangGraph node execution time recorded and summed:
 |---|---|---|
 | `chat_requests_total` | Counter | Labeled by `persona`, `short_circuit_reason` |
 | `chat_latency_ms` | Histogram | Labeled by `endpoint`, `short_circuited` |
+| `chat_ttft_ms` | Histogram | Labeled by `endpoint`; full-RAG path only — validates the TTFT p95 target in `03-non-functional-requirements.md` §1 (gap-fill, `IMPLEMENTATION_PLAN.md` Phase 14) |
 | `bedrock_embedding_calls_total` | Counter | |
 | `bedrock_text_calls_total` | Counter | |
 | `bedrock_tokens_total` | Counter | Labeled by `input`/`output` |
@@ -69,7 +70,7 @@ Exported via `GET /metrics` (Prometheus-compatible, e.g. `prometheus-fastapi-ins
 - AI cost over time (daily/weekly).
 - Short-circuit rate (% of requests avoiding LLM calls) — key cost-efficiency KPI from `01-prd.md`.
 - Latency percentiles by endpoint.
-- Top questions (User vs Visitor/Operator).
+- Top questions (combined across User and Operator, not split by role).
 - Ingestion job success/failure trend.
 
 ## 7. Alerting (recommended, Phase 2)

@@ -87,6 +87,14 @@ class UnsupportedMediaTypeError(AppError):
     status_code = 415
 
 
+class MalwareDetectedError(AppError):
+    """`MALWARE_DETECTED` / 415 — file failed content scanning
+    (docs/22-error-handling.md §2, docs/08-security.md §8a)."""
+
+    code = "MALWARE_DETECTED"
+    status_code = 415
+
+
 async def app_error_handler(request: Request, exc: Exception) -> JSONResponse:
     assert isinstance(exc, AppError)
     return JSONResponse(

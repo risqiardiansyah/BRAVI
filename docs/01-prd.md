@@ -56,7 +56,7 @@ Bravi needs an internal AI chatbot capability that can answer questions strictly
 5. **Operator lists ingested knowledge** → returns catalog of ingested documents/chunks with metadata (source, ingest date, status, freshness/versioning).
 6. **Operator ingests new knowledge** from an uploaded file or raw text → chunk → embed (Bedrock Cohere embed model) → store in pgvector; optionally tags it with an expiry date and/or marks it as superseding an older document.
 7. **Operator deletes outdated/incorrect knowledge** → document and its chunks/vectors are removed from the knowledge base immediately.
-8. **Operator views analytics** → most-asked questions by User vs Visitor, usage volume, latency, token cost, model distribution.
+8. **Operator views analytics** → most-asked questions (combined across User and Operator personas, not split by role), usage volume, latency, token cost, model distribution.
 9. **System auto-ingests existing documents** once at startup by reading document link records from the database and downloading/embedding each PDF from `DOCUMENT_BASE_URL`.
 10. **Trending questions** are surfaced publicly via `/api/trending`.
 11. **Answer mentions document freshness/versioning** when relevant → if a cited document has an expiry date or has been superseded by a newer one, the answer may note this; otherwise it says nothing about it.
@@ -104,7 +104,7 @@ Additional implied operator endpoints (to satisfy "list down Knowledge ingested"
 ### 6.4 Analytics & Observability
 
 - Track per-request: latency, model used (embedding vs text, model ID), token usage/cost estimate, short-circuit reason (if rejected early), session/user/persona.
-- `/api/opr/analytics` surfaces: most-asked questions (by User and by Visitor separately), volume over time, average latency, model usage breakdown.
+- `/api/opr/analytics` surfaces: most-asked questions under a single `top_questions.user` list — a non-role calculation that counts questions from both User and Operator sessions together, not split by persona — plus volume over time, average latency, model usage breakdown.
 - `/api/trending` surfaces top questions publicly (subset of analytics, User-facing).
 
 ## 7. Technical Constraints (given)
@@ -212,11 +212,10 @@ PORT=8000
 | # | Item | Notes |
 |---|---|---|
 | 1 | No auth/RBAC in this phase | Endpoints are trusted by path only; must be revisited before public exposure. |
-| 2 | Definition of "Visitor" vs "User" in analytics | Clarify whether Visitor = unauthenticated/anonymous `user_id` vs. registered User, since no login exists. |
-| 3 | Similarity threshold tuning | Needs empirical tuning per embedding model (Cohere embed-v4) and domain content, using real traffic once available. |
-| 4 | `embed-v4` max input tokens / output vector dimension not yet confirmed against AWS docs | Blocks finalizing `CHUNK_SIZE_TOKENS` default and `knowledge_chunks.embedding VECTOR(n)` dimension — see `05-ai-agent-design.md` §3.3 and `07-database-design.md` §3.5. |
-| 5 | `CORS_ALLOWED_ORIGINS` not yet populated | Depends on the (not-yet-built) frontend's deployed origin(s); ships restrictive/empty by default — see `08-security.md` §6. |
-| 6 | Redis is a new required infra dependency (distributed rate limiting) | Not present in earlier drafts of this PRD; must be provisioned alongside PostgreSQL — see `10-deployment.md` §6. |
+| 2 | Similarity threshold tuning | Needs empirical tuning per embedding model (Cohere embed-v4) and domain content, using real traffic once available. |
+| 3 | `embed-v4` max input tokens / output vector dimension not yet confirmed against AWS docs | Blocks finalizing `CHUNK_SIZE_TOKENS` default and `knowledge_chunks.embedding VECTOR(n)` dimension — see `05-ai-agent-design.md` §3.3 and `07-database-design.md` §3.5. |
+| 4 | `CORS_ALLOWED_ORIGINS` not yet populated | Depends on the (not-yet-built) frontend's deployed origin(s); ships restrictive/empty by default — see `08-security.md` §6. |
+| 5 | Redis is a new required infra dependency (distributed rate limiting) | Not present in earlier drafts of this PRD; must be provisioned alongside PostgreSQL — see `10-deployment.md` §6. |
 
 Resolved since earlier drafts (kept here for traceability, no longer open): image handling (Bedrock multimodal, confirmed in `05-ai-agent-design.md` §2.3), ingestion source-of-truth schema and duplicate-ingestion strategy (`07-database-design.md` §3.3/§5), file upload size/type limits (`08-security.md` §3, `MAX_IMAGE_UPLOAD_MB`/`MAX_FILE_UPLOAD_MB`).
 

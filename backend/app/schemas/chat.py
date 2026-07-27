@@ -7,11 +7,19 @@ client can parse every line with one schema.
 
 from __future__ import annotations
 
+import re
 import uuid
 from datetime import date
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
+
+# docs/08-security.md §3 — Input Validation Rules.
+_QUESTION_MAX_LENGTH = 2_000
+_USER_ID_MAX_LENGTH = 128
+# TEXT (control characters) — everything below 0x20 except tab/newline/CR, plus DEL.
+_CONTROL_CHAR_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+_USER_ID_RE = re.compile(r"^[A-Za-z0-9_.@-]+$")
 
 
 class ChatRequestFields(BaseModel):
@@ -22,6 +30,33 @@ class ChatRequestFields(BaseModel):
     session_id: uuid.UUID | None = None
     question: str
     user_id: str
+
+    @field_validator("question", mode="after")
+    @classmethod
+    def _validate_question(cls, value: str) -> str:
+        value = _CONTROL_CHAR_RE.sub("", value)
+        if len(value) > _QUESTION_MAX_LENGTH:
+            raise ValueError(
+                f"`question` must not exceed {_QUESTION_MAX_LENGTH} characters "
+                f"(docs/08-security.md §3), got {len(value)}."
+            )
+        return value
+
+    @field_validator("user_id", mode="after")
+    @classmethod
+    def _validate_user_id(cls, value: str) -> str:
+        stripped = value.strip()
+        if len(stripped) > _USER_ID_MAX_LENGTH:
+            raise ValueError(
+                f"`user_id` must not exceed {_USER_ID_MAX_LENGTH} characters "
+                f"(docs/08-security.md §3), got {len(stripped)}."
+            )
+        if stripped and not _USER_ID_RE.match(stripped):
+            raise ValueError(
+                "`user_id` may only contain letters, digits, and '.', '_', '-', '@' "
+                "(docs/08-security.md §3)."
+            )
+        return stripped
 
 
 class ChatSourceItem(BaseModel):

@@ -157,6 +157,7 @@ async def test_greeting_short_circuits_with_no_bedrock_calls(
     assert len(metrics) == 1
     assert metrics[0].short_circuit_reason == "greeting"
     assert metrics[0].short_circuited is True
+    assert metrics[0].ttft_ms is None
 
 
 # --- Tier 2: out-of-topic ---------------------------------------------------------------
@@ -246,6 +247,8 @@ async def test_full_rag_generates_grounded_answer_with_sources(
     assert final_state["mode"] is None
     assert len(stub_bedrock.embed_calls) == 1
     assert len(stub_bedrock.generate_calls) == 1
+    assert final_state["ttft_ms"] is not None
+    assert final_state["ttft_ms"] >= 0
 
     answer = final_state["answer"]
     assert "Ini adalah jawaban." in answer

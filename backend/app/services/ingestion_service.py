@@ -28,6 +28,7 @@ from app.repositories.ingestion_job_repository import IngestionJobRepository
 from app.repositories.knowledge_chunk_repository import KnowledgeChunkRepository
 from app.repositories.knowledge_document_repository import KnowledgeDocumentRepository
 from app.repositories.knowledge_source_repository import KnowledgeSourceRepository
+from app.utils.metrics import knowledge_documents_deleted_total
 
 logger = logging.getLogger(__name__)
 
@@ -206,6 +207,7 @@ async def delete_knowledge(session: AsyncSession, *, knowledge_id: uuid.UUID) ->
             await source_repo.reset_ingested(source)
 
     await session.commit()
+    knowledge_documents_deleted_total.inc()
     logger.warning(
         "knowledge_document_deleted",
         extra={

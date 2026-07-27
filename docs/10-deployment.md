@@ -101,9 +101,11 @@ SSE_KEEPALIVE_INTERVAL_SECONDS=15
 # --- Retention ---
 MESSAGE_RETENTION_DAYS=90
 USAGE_METRICS_RETENTION_DAYS=180
+RETENTION_CRON_SCHEDULE=0 3 * * *
 
 # --- Cost management ---
 DAILY_COST_BUDGET_USD=
+COST_BUDGET_CRON_SCHEDULE=0 * * * *
 
 # --- CORS ---
 CORS_ALLOWED_ORIGINS=
@@ -138,6 +140,35 @@ The startup ingestion job runs on a recurring schedule, not once inline at boot 
 - **`app` never waits on this** — `app`'s own `depends_on` only covers `db`/`redis`. At a large source-list size (thousands of documents), a full ingestion run can take a long time; blocking API readiness on it would mean the whole API is unreachable for that entire window rather than just answering against a partially-ingested knowledge base. `app` starts serving traffic as soon as `db`/`redis` are ready, and the knowledge base fills in (or refreshes) progressively as scheduled runs complete.
 - **No overlapping runs**: if a run is still in progress when the next scheduled occurrence arrives, it is skipped rather than started concurrently (`max_instances=1`); if the process was down across more than one missed occurrence, only one catch-up run fires when it restarts, not one per missed occurrence (`coalesce=True`).
 - **Ad hoc/manual run**: `python -m app.jobs.run_initial_ingestion` (or `docker compose run --rm ingestion python -m app.jobs.run_initial_ingestion`) still runs the job once, immediately, on demand — independent of the cron schedule.
+
+### 4.4 Retention Cleanup Scheduling — Cron, Not Deploy-Time, Not Blocking
+
+The `messages`/`usage_metrics` retention cleanup (`07-database-design.md` §7) follows the same cron-scheduled, fire-and-forget pattern as ingestion (§4.3), not a one-off run at deploy time:
+
+- **Schedule**: `RETENTION_CRON_SCHEDULE`, a standard 5-field cron expression (minute hour day month weekday), evaluated in UTC. Default `0 3 * * *` (daily at 03:00 UTC — after the default `INGESTION_CRON_SCHEDULE` occurrence so the two never overlap).
+- **Runner**: `python -m app.jobs.retention_scheduler` — a long-running process (its own `docker-compose.yml` service) that registers `services/retention_service.py::run_retention_cleanup` against `RETENTION_CRON_SCHEDULE` and otherwise sits idle. It does **not** run the job immediately when it starts — only at each scheduled occurrence.
+- **`app` never waits on this** — same rationale as §4.3.
+- **No overlapping runs**: `max_instances=1`/`coalesce=True`, identical semantics to §4.3.
+
+### 4.5 Cost-Budget Check Scheduling — Cron, Not Deploy-Time, Not Blocking
+
+The daily cost-budget check (`docs/19-cost-management.md` §4) follows the same
+cron-scheduled, fire-and-forget pattern as ingestion/retention (§4.3/§4.4):
+
+- **Schedule**: `COST_BUDGET_CRON_SCHEDULE`, a standard 5-field cron expression (minute
+  hour day month weekday), evaluated in UTC. Default `0 * * * *` (hourly) — unlike
+  retention's once-daily cadence, this check needs to run intra-day so a same-day budget
+  breach is caught as it happens, not only after the day has already ended.
+- **Runner**: `python -m app.jobs.cost_budget_scheduler` — a long-running process (its
+  own `docker-compose.yml` service) that registers
+  `services/cost_budget_service.py::run_cost_budget_check` against
+  `COST_BUDGET_CRON_SCHEDULE` and otherwise sits idle. It does **not** run the check
+  immediately when it starts — only at each scheduled occurrence.
+- **`app` never waits on this** — same rationale as §4.3.
+- **No overlapping runs**: `max_instances=1`/`coalesce=True`, identical semantics to §4.3.
+- **No-op when `DAILY_COST_BUDGET_USD` is unset**: the check still runs on schedule but
+  always resolves to "not exceeded" (docs/19-cost-management.md §4: unset means no budget
+  alert).
 
 ## 5. CI/CD (recommended)
 

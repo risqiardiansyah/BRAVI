@@ -7,7 +7,11 @@ package-mode = false
 
 [tool.poetry.dependencies]
 python = "^3.11"
-fastapi = "^0.115"
+fastapi = "^0.140"
+# Pinned explicitly (not just a transitive fastapi dependency) to force resolution past
+# 0.46.2, which carries several known CVEs (docs/08-security.md §8, Phase 12) that
+# fastapi's own `>=0.46.0` constraint alone would not have picked up.
+starlette = "^1.3.1"
 uvicorn = { extras = ["standard"], version = "^0.32" }
 pydantic-settings = "^2.6"
 sqlalchemy = { extras = ["asyncio"], version = "^2.0" }
@@ -23,14 +27,16 @@ tiktoken = "^0.13.0"
 httpx = "^0.28.1"
 apscheduler = "^3.11.3"
 python-multipart = "^0.0.32"
+pyyaml = "^6.0.3"
 
 [tool.poetry.group.dev.dependencies]
-black = "^24.10"
+black = "^26.3"
 ruff = "^0.7"
 mypy = "^1.13"
-pytest = "^8.3"
-pytest-asyncio = "^0.24"
+pytest = "^9.0"
+pytest-asyncio = "^1.4"
 fakeredis = "^2.24"
+pytest-cov = "^7.1.0"
 
 [build-system]
 requires = ["poetry-core"]
@@ -69,6 +75,14 @@ ignore_missing_imports = true
 module = "apscheduler.*"
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+module = "yaml.*"
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+    "load: sustained concurrent-load test against a real DB (docs/12-testing-strategy.md §1/§6) — excluded by default, run via `pytest -m load`",
+]
+addopts = ["-m", "not load"]

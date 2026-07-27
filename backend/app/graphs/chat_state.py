@@ -83,3 +83,11 @@ class ChatState(TypedDict, total=False):
     text_model_used: str | None
     input_tokens: int | None
     output_tokens: int | None
+
+    # Time to first streamed token, in ms, measured from `started_monotonic` to the first
+    # `generate_answer`/`generate_summary` chunk (docs/03-non-functional-requirements.md §1
+    # TTFT target, docs/20-performance-target.md §3). Only ever set on the full-RAG path —
+    # short-circuit tiers emit their single canned/answer token in one shot at the SSE
+    # layer (`services/chat_service.py::_stream_chat_graph`), where "time to first token"
+    # and "total latency" are the same number, so a separate TTFT is not meaningful there.
+    ttft_ms: int | None

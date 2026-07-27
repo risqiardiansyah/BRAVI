@@ -17,6 +17,7 @@ from fastapi.responses import JSONResponse
 
 from app.clients.redis_client import RedisClient, redis_client
 from app.config import settings
+from app.utils.metrics import rate_limit_rejections_total
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +98,7 @@ class TokenBucketRateLimiter:
         """Raise `RateLimitExceededError` if `identity`'s bucket for `endpoint` is exhausted."""
         if not await self.allow(endpoint=endpoint, identity=identity):
             logger.info("Rate limit exceeded (endpoint=%s, identity=%s)", endpoint, identity)
+            rate_limit_rejections_total.labels(endpoint=endpoint).inc()
             raise RateLimitExceededError(endpoint=endpoint, identity=identity)
 
 

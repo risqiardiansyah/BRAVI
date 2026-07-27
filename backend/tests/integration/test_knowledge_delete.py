@@ -50,6 +50,7 @@ from app.models.knowledge_source import KnowledgeSource
 from app.repositories.knowledge_document_repository import KnowledgeDocumentRepository
 from app.repositories.knowledge_source_repository import KnowledgeSourceRepository
 from app.services import ingestion_service as ingestion_service_module
+from app.utils.metrics import knowledge_documents_deleted_total
 
 
 @pytest_asyncio.fixture
@@ -130,12 +131,15 @@ async def test_delete_cascades_chunks_and_preserves_job_history(
         assert len(jobs_before) == 1
         job_id = jobs_before[0].id
 
+    metric_before = knowledge_documents_deleted_total._value.get()
     delete_response = client.delete(f"/api/opr/knowledge/{knowledge_id}")
     assert delete_response.status_code == 200
     delete_body = delete_response.json()
     assert delete_body["knowledge_id"] == knowledge_id
     assert delete_body["status"] == "deleted"
     assert delete_body["chunks_removed"] == item["chunk_count"]
+    # docs/09-observability.md §5 — knowledge_documents_deleted_total.
+    assert knowledge_documents_deleted_total._value.get() == metric_before + 1
 
     async with app_session_factory() as session:
         # Document (and, via DB-level ON DELETE CASCADE, its knowledge_chunks) is gone.

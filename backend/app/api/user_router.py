@@ -2,38 +2,33 @@
 (docs/11-coding-standard.md §2).
 
 Phase 8 (docs/IMPLEMENTATION_PLAN.md) wired session listing + message history.
-`POST /api/chat` is this phase's (9) own addition; `GET /api/trending` lands in Phase 11.
+Phase 9 added `POST /api/chat`; Phase 11 (this) adds `GET /api/trending`.
 
-Routers only parse/validate the request and delegate to `services/chat_service.py`
-(docs/11-coding-standard.md §4) — no business logic here.
+Routers only parse/validate the request and delegate to `services/chat_service.py`/
+`services/analytics_service.py` (docs/11-coding-standard.md §4) — no business logic here.
 """
 
 from __future__ import annotations
 
-from typing import Annotated, Any
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
-from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
-from starlette.datastructures import UploadFile
 
-from app.config import settings
 from app.db import get_session
-from app.errors import FileTooLargeError, InvalidRequestError, UnsupportedMediaTypeError
+from app.errors import InvalidRequestError
 from app.middleware.rate_limit import rate_limit_dependency
-from app.schemas.chat import ChatRequestFields
+from app.schemas.analytics import TrendingResponse
 from app.schemas.message import MessageItem, MessagesRequest, MessagesResponse
 from app.schemas.session import SessionListItem, SessionListResponse
-from app.services import chat_service
+from app.services import analytics_service, chat_service
+from app.services.analytics_service import TRENDING_DEFAULT_LIMIT, TRENDING_DEFAULT_WINDOW_DAYS
+from app.utils.chat_request import parse_chat_request, read_and_validate_image
 
 router = APIRouter(prefix="/api", tags=["user"])
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
-
-# docs/08-security.md §3 — chat image upload MIME allowlist, mapped to the
-# `image_format` literal `clients/bedrock_client.py`'s multimodal payload expects.
-_ALLOWED_IMAGE_MIME_TYPES = {"image/png": "png", "image/jpeg": "jpeg", "image/webp": "webp"}
 
 
 @router.get("/session")
@@ -78,69 +73,6 @@ async def get_messages(payload: MessagesRequest, session: SessionDep) -> Message
     )
 
 
-async def _parse_chat_request(request: Request) -> tuple[ChatRequestFields, UploadFile | None]:
-    """`POST /api/chat` accepts `multipart/form-data` (when `file` is attached) or plain
-    JSON otherwise (docs/06-api-specification.md §2) — genuinely dual wire formats on one
-    route isn't expressible via FastAPI's declarative `Body`/`Form` params (which commit to
-    one shape at decoration time), so the raw `Request` is parsed manually here and
-    validated against the same `ChatRequestFields` model either way.
-    """
-    content_type = request.headers.get("content-type", "")
-    raw: dict[str, Any]
-    file: UploadFile | None = None
-
-    if content_type.startswith("multipart/form-data"):
-        form = await request.form()
-        raw = {
-            "session_id": form.get("session_id") or None,
-            "question": form.get("question"),
-            "user_id": form.get("user_id"),
-        }
-        maybe_file = form.get("file")
-        if isinstance(maybe_file, UploadFile) and maybe_file.filename:
-            file = maybe_file
-    else:
-        try:
-            raw = await request.json()
-        except ValueError as exc:
-            raise InvalidRequestError("Request body must be valid JSON.") from exc
-        if not isinstance(raw, dict):
-            raise InvalidRequestError("Request body must be a JSON object.")
-
-    try:
-        fields = ChatRequestFields.model_validate(raw)
-    except ValidationError as exc:
-        raise InvalidRequestError(str(exc)) from exc
-
-    if not fields.question.strip():
-        raise InvalidRequestError("Missing required field `question`.")
-    if not fields.user_id.strip():
-        raise InvalidRequestError("Missing required field `user_id`.")
-
-    return fields, file
-
-
-async def _read_and_validate_image(file: UploadFile | None) -> tuple[bytes | None, str | None]:
-    """MIME allowlist + size-limit checks (docs/08-security.md §3) for `/api/chat`'s
-    optional image upload — 415/413 per docs/06-api-specification.md §2's error table.
-    Real malware/content scanning (docs/08-security.md §8a) is Phase 12 scope.
-    """
-    if file is None:
-        return None, None
-
-    content_type = file.content_type or ""
-    image_format = _ALLOWED_IMAGE_MIME_TYPES.get(content_type)
-    if image_format is None:
-        raise UnsupportedMediaTypeError(f"Unsupported file type: {content_type!r}.")
-
-    raw_bytes = await file.read()
-    max_bytes = settings.MAX_IMAGE_UPLOAD_MB * 1024 * 1024
-    if len(raw_bytes) > max_bytes:
-        raise FileTooLargeError(f"File exceeds the {settings.MAX_IMAGE_UPLOAD_MB}MB limit.")
-
-    return raw_bytes, image_format
-
-
 @router.post("/chat")
 async def chat(
     request: Request,
@@ -155,8 +87,8 @@ async def chat(
     Everything after that point (the graph run itself) can only fail as an in-stream SSE
     `error` event, handled inside `chat_service.stream_user_chat_response`.
     """
-    fields, file = await _parse_chat_request(request)
-    image_bytes, image_format = await _read_and_validate_image(file)
+    fields, file = await parse_chat_request(request)
+    image_bytes, image_format = await read_and_validate_image(file)
 
     resolved = await chat_service.resolve_session(
         session, session_id=fields.session_id, user_id=fields.user_id, persona="user"
@@ -184,3 +116,21 @@ async def chat(
         media_type="text/event-stream",
         headers={"X-Accel-Buffering": "no"},
     )
+
+
+@router.get("/trending")
+async def trending(
+    session: SessionDep,
+    limit: int = TRENDING_DEFAULT_LIMIT,
+    window_days: int = TRENDING_DEFAULT_WINDOW_DAYS,
+) -> TrendingResponse:
+    """`GET /api/trending` — docs/06-api-specification.md §4."""
+    if limit < 1:
+        raise InvalidRequestError("`limit` must be a positive integer.")
+    if window_days < 1:
+        raise InvalidRequestError("`window_days` must be a positive integer.")
+
+    resolved_window_days, items = await analytics_service.get_trending(
+        session, window_days=window_days, limit=limit
+    )
+    return TrendingResponse(window_days=resolved_window_days, trending=items)

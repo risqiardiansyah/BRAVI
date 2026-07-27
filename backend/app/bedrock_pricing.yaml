@@ -1,0 +1,19 @@
+# Bedrock $ pricing table — docs/19-cost-management.md §2.
+#
+# This is a config file, not code: a pricing change is a config update + redeploy, never
+# a schema or code change (AWS pricing changes independently of this application's
+# release cycle). `app/utils/pricing.py` loads it once at import time.
+#
+# NOTE: the rates below are PLACEHOLDERS. `BEDROCK_TEXT_MODEL`/`BEDROCK_EMBEDDING_MODEL`
+# (docs/10-deployment.md §3) reference model ids that do not correspond to a publicly
+# listed AWS Bedrock pricing-page entry as of this implementation — per §2's own
+# instruction to "pull actual rates from the AWS Bedrock pricing page at implementation
+# time," replace these two rate rows with the real, current on-demand $/1,000-token
+# prices for the actual models deployed, before this reaches production.
+models:
+  "global.anthropic.claude-sonnet-4-6":
+    input_per_1k_tokens_usd: 3.0
+    output_per_1k_tokens_usd: 15.0
+  "arn:aws:bedrock:ap-southeast-3:586794442374:inference-profile/global.cohere.embed-v4:0":
+    input_per_1k_tokens_usd: 0.1
+    output_per_1k_tokens_usd: 0.0

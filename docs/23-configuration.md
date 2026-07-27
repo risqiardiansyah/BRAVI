@@ -27,8 +27,8 @@ Grouping mirrors `10-deployment.md` §3's section comments, with added Secret/Re
 | Redis / rate limiting | `REDIS_URL` | Treat as sensitive (internal network address) | Yes |
 | | `RATE_LIMIT_REQUESTS_PER_MINUTE`, `RATE_LIMIT_BURST` | No | No (has default) |
 | Streaming | `SSE_KEEPALIVE_INTERVAL_SECONDS` | No | No (has default) |
-| Retention | `MESSAGE_RETENTION_DAYS`, `USAGE_METRICS_RETENTION_DAYS` | No | No (has default) |
-| Cost | `DAILY_COST_BUDGET_USD` (`19-cost-management.md` §4) | No | No (optional — no alert if unset) |
+| Retention | `MESSAGE_RETENTION_DAYS`, `USAGE_METRICS_RETENTION_DAYS`, `RETENTION_CRON_SCHEDULE` (`10-deployment.md` §4.4 — 5-field cron expression, UTC, controlling when `app/jobs/retention_scheduler.py` runs `services/retention_service.py`; never run automatically at app/container startup) | No | No (has default) |
+| Cost | `DAILY_COST_BUDGET_USD` (`19-cost-management.md` §4), `COST_BUDGET_CRON_SCHEDULE` (`10-deployment.md` §4.5 — 5-field cron expression, UTC, default hourly, controlling when `app/jobs/cost_budget_scheduler.py` runs `services/cost_budget_service.py`; never run automatically at app/container startup) | No | No (optional — no alert if `DAILY_COST_BUDGET_USD` unset) |
 | CORS | `CORS_ALLOWED_ORIGINS` | No | Should be set (ships empty/restrictive by default — `08-security.md` §6a) |
 | App | `APP_ENV`, `LOG_LEVEL`, `PORT` | No | No (has default) |
 
@@ -38,6 +38,8 @@ Previously scattered as isolated mentions (`13-roadmap.md` Phase 1 bullet, `05-a
 
 - `CHUNK_OVERLAP_TOKENS < CHUNK_SIZE_TOKENS`
 - `INGESTION_CRON_SCHEDULE` must be a valid 5-field cron expression (minute hour day month weekday)
+- `RETENTION_CRON_SCHEDULE` must be a valid 5-field cron expression (minute hour day month weekday)
+- `COST_BUDGET_CRON_SCHEDULE` must be a valid 5-field cron expression (minute hour day month weekday)
 - `0 < SIMILARITY_SCORE_THRESHOLD <= 1`
 - `0 <= BEDROCK_TEMPERATURE <= 1`
 - `BEDROCK_MAX_RETRIES >= 0`, `BEDROCK_CIRCUIT_BREAKER_FAILURE_THRESHOLD >= 1`

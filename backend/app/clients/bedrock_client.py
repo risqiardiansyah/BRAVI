@@ -25,6 +25,11 @@ from botocore.config import Config as BotoConfig
 from botocore.exceptions import BotoCoreError, ClientError, ConnectTimeoutError, ReadTimeoutError
 
 from app.config import settings
+from app.utils.metrics import (
+    bedrock_circuit_breaker_state,
+    bedrock_embedding_calls_total,
+    bedrock_text_calls_total,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -233,6 +238,7 @@ class BedrockClient:
         a similarity search this call is for — Cohere's own guidance is to embed
         corpus content with `search_document` and queries with `search_query`."""
         await self._circuit_breaker.before_call()
+        bedrock_embedding_calls_total.inc()
         try:
             result = await self._with_retry(lambda: self._invoke_embed(texts, input_type))
         except BedrockInvocationError:
@@ -286,6 +292,7 @@ class BedrockClient:
                 f"generate_stream() accepts no per-call overrides in this phase: {sorted(params)}"
             )
         await self._circuit_breaker.before_call()
+        bedrock_text_calls_total.inc()
         try:
             stream = await self._with_retry(lambda: self._start_stream(prompt))
         except BedrockInvocationError:
@@ -398,3 +405,15 @@ class BedrockClient:
 
 
 bedrock_client = BedrockClient()
+
+_CIRCUIT_STATE_GAUGE_VALUES = {
+    CircuitState.CLOSED: 0,
+    CircuitState.OPEN: 1,
+    CircuitState.HALF_OPEN: 2,
+}
+# Evaluated live at each `/metrics` scrape (docs/09-observability.md §5) rather than set
+# on every transition — `circuit_breaker_state` is already a cheap accessor, so a
+# collect-time callback can't drift out of sync the way a manually-updated Gauge could.
+bedrock_circuit_breaker_state.set_function(
+    lambda: _CIRCUIT_STATE_GAUGE_VALUES[bedrock_client.circuit_breaker_state]
+)

@@ -110,3 +110,29 @@ _OUT_OF_TOPIC_RE = re.compile("|".join(_OUT_OF_TOPIC_PATTERNS), re.IGNORECASE)
 
 def is_out_of_topic(question: str) -> bool:
     return bool(_OUT_OF_TOPIC_RE.search(question))
+
+
+# --- docs/prompts/ai-agent.md §6 — Add-Knowledge-Intent (Operator only, no LLM call) ----
+
+# The one deliberate exception to "answers are plain Markdown": `<BTN>Label</BTN>` is a
+# custom, non-standard inline tag the frontend parses into an actionable button — not
+# CommonMark, never rendered as literal HTML by the client (docs/05-ai-agent-design.md
+# §2.5, docs/06-api-specification.md §0/§5).
+ADD_KNOWLEDGE_INTENT_RESPONSE = (
+    "Silahkan klik tombol berikut untuk mengisi form: <BTN>Add Knowledge</BTN>"
+)
+
+# Bilingual keyword/phrase match — docs/05-ai-agent-design.md §2.3's own examples:
+# "tambah knowledge ai", "tambah pengetahuan ai", "add ai knowledge", "add knowledge ai".
+# `operator_chat_graph` only; this node/classifier must never be wired into
+# `user_chat_graph` (docs/11-coding-standard.md §8.1).
+_ADD_KNOWLEDGE_INTENT_PATTERNS = (
+    r"\btambah\s+(knowledge|pengetahuan)\s+ai\b",
+    r"\badd\s+ai\s+knowledge\b",
+    r"\badd\s+knowledge\s+ai\b",
+)
+_ADD_KNOWLEDGE_INTENT_RE = re.compile("|".join(_ADD_KNOWLEDGE_INTENT_PATTERNS), re.IGNORECASE)
+
+
+def is_add_knowledge_intent(question: str) -> bool:
+    return bool(_ADD_KNOWLEDGE_INTENT_RE.search(question))

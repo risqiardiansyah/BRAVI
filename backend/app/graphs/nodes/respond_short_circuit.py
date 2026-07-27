@@ -12,6 +12,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.graphs.canned_responses import (
+    ADD_KNOWLEDGE_INTENT_RESPONSE,
     GREETING_RESPONSE,
     NO_KNOWLEDGE_FOUND_RESPONSE,
     OUT_OF_TOPIC_RESPONSE,
@@ -25,6 +26,18 @@ def respond_default_greeting(state: ChatState) -> dict[str, Any]:
         "sources": [],
         "short_circuited": True,
         "short_circuit_reason": "greeting",
+        "mode": None,
+    }
+
+
+def respond_add_knowledge_template(state: ChatState) -> dict[str, Any]:
+    """`operator_chat_graph` only — docs/05-ai-agent-design.md §2.2/§2.5,
+    docs/06-api-specification.md §5."""
+    return {
+        "answer": ADD_KNOWLEDGE_INTENT_RESPONSE,
+        "sources": [],
+        "short_circuited": True,
+        "short_circuit_reason": "add_knowledge_intent",
         "mode": None,
     }
 

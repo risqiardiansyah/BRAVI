@@ -104,4 +104,4 @@ This is a trimmed quick-start subset — the full variable list (Bedrock resilie
 
 ## Open Questions / Known Gaps
 
-See [`docs/01-prd.md`](docs/01-prd.md) §11 — notably: precise User vs Visitor definition for analytics, confirming `embed-v4`'s exact max input tokens/output vector dimension, and populating `CORS_ALLOWED_ORIGINS` once a frontend origin exists.
+See [`docs/01-prd.md`](docs/01-prd.md) §11 — notably: confirming `embed-v4`'s exact max input tokens/output vector dimension, and populating `CORS_ALLOWED_ORIGINS` once a frontend origin exists.

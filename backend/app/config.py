@@ -99,9 +99,22 @@ class Settings(BaseSettings):
     # --- Retention ---
     MESSAGE_RETENTION_DAYS: int = 90
     USAGE_METRICS_RETENTION_DAYS: int = 180
+    # 5-field cron expression (minute hour day month weekday), evaluated in UTC —
+    # `app/jobs/retention_scheduler.py` runs `services/retention_service.py` at each
+    # occurrence, mirroring `INGESTION_CRON_SCHEDULE`'s pattern (see that field's note
+    # and `IMPLEMENTATION_PLAN.md` Phase 13's dated note). Default `0 3 * * *` (daily
+    # 03:00 UTC, after the 02:00 UTC ingestion run so the two never overlap).
+    RETENTION_CRON_SCHEDULE: str = "0 3 * * *"
 
     # --- Cost management ---
     DAILY_COST_BUDGET_USD: float | None = None
+    # 5-field cron expression (minute hour day month weekday), evaluated in UTC —
+    # `app/jobs/cost_budget_scheduler.py` runs `services/cost_budget_service.py` at each
+    # occurrence, mirroring `INGESTION_CRON_SCHEDULE`/`RETENTION_CRON_SCHEDULE`'s pattern.
+    # Default hourly (not once daily like retention) — docs/19-cost-management.md §4's
+    # check sums the *current* UTC calendar day so far, so it needs to run intra-day to
+    # catch a budget breach as it happens rather than only after the day has ended.
+    COST_BUDGET_CRON_SCHEDULE: str = "0 * * * *"
 
     # --- CORS ---
     CORS_ALLOWED_ORIGINS: str = ""
@@ -155,6 +168,22 @@ class Settings(BaseSettings):
                 f"(minute hour day month weekday), got {self.INGESTION_CRON_SCHEDULE!r}: {exc}"
             )
 
+        try:
+            CronTrigger.from_crontab(self.RETENTION_CRON_SCHEDULE, timezone="UTC")
+        except ValueError as exc:
+            errors.append(
+                "RETENTION_CRON_SCHEDULE must be a valid 5-field cron expression "
+                f"(minute hour day month weekday), got {self.RETENTION_CRON_SCHEDULE!r}: {exc}"
+            )
+
+        try:
+            CronTrigger.from_crontab(self.COST_BUDGET_CRON_SCHEDULE, timezone="UTC")
+        except ValueError as exc:
+            errors.append(
+                "COST_BUDGET_CRON_SCHEDULE must be a valid 5-field cron expression "
+                f"(minute hour day month weekday), got {self.COST_BUDGET_CRON_SCHEDULE!r}: {exc}"
+            )
+
         if self.BEDROCK_CIRCUIT_BREAKER_FAILURE_THRESHOLD < 1:
             errors.append(
                 "BEDROCK_CIRCUIT_BREAKER_FAILURE_THRESHOLD must be >= 1, got "
@@ -190,6 +219,14 @@ class Settings(BaseSettings):
                     "browser origins will be allowed until this is set "
                     "(docs/08-security.md §6a)."
                 )
+
+        if self.APP_ENV in ("staging", "production") and "*" in (
+            origin.strip() for origin in self.CORS_ALLOWED_ORIGINS.split(",")
+        ):
+            errors.append(
+                "CORS_ALLOWED_ORIGINS must not include a wildcard ('*') when "
+                f"APP_ENV={self.APP_ENV!r} (docs/08-security.md §6a)."
+            )
 
         if errors:
             raise ValueError("Invalid configuration:\n- " + "\n- ".join(errors))

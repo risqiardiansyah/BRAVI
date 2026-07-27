@@ -38,6 +38,39 @@ services:
       db:
         condition: service_healthy
     restart: unless-stopped
+  # Cron-scheduled retention cleanup job (docs/10-deployment.md §4.4, docs/07-database-design.md
+  # §7, docs/IMPLEMENTATION_PLAN.md Phase 13) — mirrors the `ingestion` service above: a
+  # separate long-running container, NOT run immediately on `docker-compose up`. It only
+  # invokes the actual cleanup at each occurrence of RETENTION_CRON_SCHEDULE (default daily
+  # 03:00 UTC). `app` never depends on this container.
+  retention:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/bravi_ai_chatbot
+    command: ["python", "-m", "app.jobs.retention_scheduler"]
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+  # Cron-scheduled cost-budget check (docs/19-cost-management.md §4,
+  # docs/IMPLEMENTATION_PLAN.md Phase 13) — same pattern as `retention` above, but hourly
+  # by default (COST_BUDGET_CRON_SCHEDULE) rather than once daily, since it needs to catch
+  # a same-day budget breach as it happens rather than only after the day has ended.
+  cost_budget:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/bravi_ai_chatbot
+    command: ["python", "-m", "app.jobs.cost_budget_scheduler"]
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
   db:
     image: pgvector/pgvector:pg16
     environment:

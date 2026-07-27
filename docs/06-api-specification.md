@@ -244,7 +244,7 @@ supersedes_document_id: uuid (optional) — marks the referenced existing docume
 ```
 Exactly one of `file` or `text` must be provided.
 
-**Optional `Idempotency-Key` header**: if a client retries the same upload after a timeout/dropped response, pass the same `Idempotency-Key` to avoid double-ingesting — the server checks it (alongside the existing content-hash in `knowledge_sources.content_hash`, see `07-database-design.md` §5) and returns the original `knowledge_id`/`status` instead of starting a duplicate job.
+**Optional `Idempotency-Key` header**: if a client retries the same upload after a timeout/dropped response, pass the same `Idempotency-Key` to avoid double-ingesting — the server checks it (alongside the content hash stored in `knowledge_documents.content_hash`, see `07-database-design.md` §5c) and returns the original `knowledge_id`/`status` instead of starting a duplicate job.
 
 **Response `202 Accepted`**
 ```json
@@ -319,8 +319,7 @@ Permanently delete an ingested document and its chunks/vectors from the knowledg
 {
   "period": { "from": "2026-07-01", "to": "2026-07-26" },
   "top_questions": {
-    "user": [ { "question": "string", "count": 30 } ],
-    "visitor": [ { "question": "string", "count": 18 } ]
+    "user": [ { "question": "string", "count": 48 } ]
   },
   "volume": { "total_chats": 512, "by_day": [ { "date": "2026-07-25", "count": 40 } ] },
   "latency": { "p50_ms": 850, "p95_ms": 4200 },

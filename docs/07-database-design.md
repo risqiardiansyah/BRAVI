@@ -77,12 +77,17 @@ CREATE TABLE knowledge_documents (
     valid_until              DATE,                    -- nullable; optional expiry set at ingest time, see §5b
     superseded_by_document_id UUID REFERENCES knowledge_documents(id) ON DELETE SET NULL,  -- nullable; set on the OLD doc when a newer one supersedes it
     ingested_at               TIMESTAMPTZ,
+    idempotency_key           TEXT,                    -- nullable; only set for /api/opr/ingest requests carrying an Idempotency-Key header, see §5c
+    content_hash              TEXT,                    -- nullable; SHA-256 of the ingested content, paired with idempotency_key
     created_at                TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+CREATE UNIQUE INDEX idx_knowledge_documents_idempotency_key ON knowledge_documents(idempotency_key) WHERE idempotency_key IS NOT NULL;
 ```
 > `source_url` feeds the `[Link Text](URL)` citation format required in chat answers (see `06-api-specification.md` §0). Chunks retrieved from a document with `source_url IS NULL` (raw-text ingests with no addressable location) are still cited by title, without a link.
 >
 > `valid_until`/`superseded_by_document_id` feed the answer-freshness behavior in `05-ai-agent-design.md` §2.3/§4: `similarity_search` attaches these to each `top_matches` entry, and the system prompt is instructed to mention them naturally *only when set* — see §5b below for how they get populated.
+>
+> `idempotency_key`/`content_hash` are distinct from `knowledge_sources.content_hash` (§3.3, used only for startup-managed source change detection) — see §5c for how `/api/opr/ingest`'s `Idempotency-Key` conflict check uses these two columns.
 
 ### 3.5 `knowledge_chunks`
 ```sql
@@ -135,6 +140,7 @@ CREATE TABLE usage_metrics (
     output_tokens        INT,
     estimated_cost_usd    NUMERIC(10,4),
     latency_ms            INT,
+    ttft_ms               INT,           -- time to first streamed token, full-RAG path only; null for short-circuit tiers (gap-fill, IMPLEMENTATION_PLAN.md Phase 14 — see 03-non-functional-requirements.md §1 TTFT target)
     created_at            TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX idx_usage_metrics_created_at ON usage_metrics(created_at);
@@ -170,6 +176,15 @@ Operator-only, hard delete — see `06-api-specification.md` §7.1 for the endpo
 - When `supersedes_document_id` is provided, the ingestion service sets `knowledge_documents.superseded_by_document_id = <new document's id>` **on the old document being superseded** (not on the new one) — the new document itself carries no `superseded_by_document_id` (it isn't superseded by anything).
 - There is no update/PATCH endpoint to change these on an already-ingested document in Phase 1 — correcting them means re-ingesting.
 - Both are surfaced to the chat graphs via `similarity_search`/`top_matches` and to API clients via the `sources[]` array on the `done` SSE event (`06-api-specification.md` §0), so a frontend can render a badge even where the model doesn't weave it into prose.
+
+## 5c. Idempotency-Key Strategy for `POST /api/opr/ingest`
+
+Distinct mechanism from §5's startup-ingestion `knowledge_sources.content_hash` — this one covers on-demand operator uploads (`06-api-specification.md` §6, `22-error-handling.md` §4):
+
+- `knowledge_documents.content_hash` is the SHA-256 of the uploaded file bytes (or raw text, UTF-8 encoded), computed on every `/api/opr/ingest` request regardless of whether an `Idempotency-Key` header is sent.
+- `knowledge_documents.idempotency_key` is only set when the caller sends an `Idempotency-Key` header; it is looked up via the unique partial index `idx_knowledge_documents_idempotency_key` (§3.4).
+- On a request carrying a key that already exists: if `content_hash` matches the existing row, no new document/job is created — the original document's `id`/`status` is returned as-is (safe retry after a timeout/dropped response). If `content_hash` differs, the request is rejected with `IDEMPOTENCY_KEY_CONFLICT` (`22-error-handling.md` §4) and no row is created.
+- Implementation: `app/services/ingestion_service.py::ingest_document`.
 
 ## 6. Migrations
 
